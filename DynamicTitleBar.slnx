@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="DynamicTitleBar.vcxproj" Id="adce2d66-5f95-4ca3-9f3f-10080a8a38d8" />
+</Solution>
