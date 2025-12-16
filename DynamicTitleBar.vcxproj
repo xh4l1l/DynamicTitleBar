@@ -127,17 +127,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Application.cpp" />
     <ClCompile Include="Program.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Application.ico" />
-    <Image Include="C:\Users\Khali\Downloads\Application.ico" />
-    <Image Include="C:\Users\Khali\Downloads\Dark.ico" />
-    <Image Include="C:\Users\Khali\Downloads\Light.ico" />
     <Image Include="Dark.ico" />
     <Image Include="Light.ico" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Application.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

@@ -15,20 +15,14 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Application.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Program.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="C:\Users\Khali\Downloads\Application.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="C:\Users\Khali\Downloads\Dark.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="C:\Users\Khali\Downloads\Light.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="Application.ico">
       <Filter>Resource Files</Filter>
     </Image>
@@ -41,6 +35,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Application.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
