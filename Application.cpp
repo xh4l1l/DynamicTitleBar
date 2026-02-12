@@ -1,6 +1,6 @@
 #include "Application.h"
 
-Application* Application::sInstance = nullptr;
+Application* Application::instancePointer = nullptr;
 
 Application::Application(HINSTANCE instance)
 	: instance(instance) {
@@ -15,7 +15,7 @@ void Application::createWindow() {
 
 	window = CreateWindowEx(
 		0,
-		L"DynamicTitleBarWindow",
+		APPLICATION_WINDOW_CLASS,
 		APPLICATION_NAME,
 		WS_SYSMENU | WS_CAPTION,
 		(screenWidth - windowWidth) / 2,
@@ -27,7 +27,7 @@ void Application::createWindow() {
 		this
 	);
 
-	// TODO: Full GUI implementation later; Custom one not based on comctl32.
+	createTrayIcon();
 }
 
 bool Application::isDarkMode() {
@@ -73,7 +73,7 @@ bool Application::isStartupEnabled() {
 	LONG result = RegGetValueW(
 		key,
 		NULL,
-		L"Application",
+		APPLICATION_NAME,
 		RRF_RT_REG_SZ,
 		NULL,
 		path,
@@ -95,7 +95,7 @@ void Application::setStartup(bool enable) {
 		return;
 
 	if (!enable) {
-		RegDeleteValueW(key, L"Application");
+		RegDeleteValueW(key, APPLICATION_NAME);
 		RegCloseKey(key);
 		return;
 	}
@@ -105,7 +105,7 @@ void Application::setStartup(bool enable) {
 
 	RegSetValueExW(
 		key,
-		L"Application",
+		APPLICATION_NAME,
 		0,
 		REG_SZ,
 		(BYTE*)exePath,
@@ -115,19 +115,25 @@ void Application::setStartup(bool enable) {
 	RegCloseKey(key);
 }
 
-void Application::applyTheme(HWND hwnd) {
-	if (!IsWindowVisible(hwnd))
-		return;
+void Application::applyTheme(HWND handleToWindow) {
+	if (!IsWindowVisible(handleToWindow)) return;
 
-	BOOL dark = resolveDarkMode();
-	DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+	const BOOL dark = resolveDarkMode();
+
+	const DWORD DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+	if (FAILED(DwmSetWindowAttribute(handleToWindow, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark)))) {
+		const DWORD DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
+		DwmSetWindowAttribute(handleToWindow, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, &dark, sizeof(dark));
+	}
+
+	SetWindowTheme(handleToWindow, nullptr, nullptr);
 }
 
 void Application::updateAllWindows() {
 	EnumWindows(
-		[](HWND hwnd, LPARAM param) -> BOOL {
-			reinterpret_cast<Application*>(param)->applyTheme(hwnd);
-			return TRUE;
+		[](HWND handleToWindow, LPARAM param) -> BOOL {
+			reinterpret_cast<Application*>(param)->applyTheme(handleToWindow);
+			return true;
 		},
 		reinterpret_cast<LPARAM>(this)
 	);
@@ -135,7 +141,7 @@ void Application::updateAllWindows() {
 
 void Application::createTrayIcon() {
 	if (trayIconCreated)
-		Shell_NotifyIcon(NIM_DELETE, &trayData);
+		return;
 
 	trayData.cbSize = sizeof(NOTIFYICONDATA);
 
@@ -229,7 +235,7 @@ void Application::showContextMenu() {
 		);
 
 	if (cmd == 4)
-		ShellExecute(NULL, L"open", L"https://www.discord.gg/Wf3VPU7Zez", NULL, NULL, SW_SHOWNORMAL);
+		ShellExecute(NULL, L"open", SUPPORT_URL, NULL, NULL, SW_SHOWNORMAL);
 
 	if (cmd == 1) {
 		DestroyMenu(menu);
@@ -244,7 +250,7 @@ void Application::showContextMenu() {
 void CALLBACK Application::eventCallback(
 	HWINEVENTHOOK,
 	DWORD,
-	HWND hwnd,
+	HWND handleToWindow,
 	LONG idObject,
 	LONG,
 	DWORD,
@@ -253,10 +259,10 @@ void CALLBACK Application::eventCallback(
 	if (idObject != OBJID_WINDOW)
 		return;
 
-	if (!sInstance)
+	if (!instancePointer)
 		return;
 
-	sInstance->applyTheme(hwnd);
+	instancePointer->applyTheme(handleToWindow);
 }
 
 DWORD WINAPI Application::themeWatcher(void* param) {
@@ -272,52 +278,54 @@ DWORD WINAPI Application::themeWatcher(void* param) {
 	for (;;) {
 		RegNotifyChangeKeyValue(key, FALSE, REG_NOTIFY_CHANGE_LAST_SET, NULL, FALSE);
 
-		if (!sInstance)
+		if (!instancePointer)
 			continue;
 
-		if (sInstance->themeMode != ThemeMode::System)
+		if (instancePointer->themeMode != ThemeMode::System)
 			continue;
 
-		sInstance->updateTrayIcon();
-		sInstance->updateAllWindows();
+		instancePointer->updateTrayIcon();
+		instancePointer->updateAllWindows();
 	}
 }
 
-LRESULT CALLBACK Application::wndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
+LRESULT CALLBACK Application::wndProc(HWND handleToWindow, UINT msg, WPARAM w, LPARAM l) {
 	static UINT taskbarCreated;
 
 	switch (msg) {
 	case WM_CREATE:
-		taskbarCreated = RegisterWindowMessage(TEXT("TaskbarCreated"));
+		taskbarCreated = RegisterWindowMessage(L"TaskbarCreated");
 		return 0;
 	case WM_CLOSE:
-		ShowWindow(hwnd, SW_HIDE);
+#if !_DEBUG
+		ShowWindow(handleToWindow, SW_HIDE);
 		return 0;
+#endif
 	case WM_DESTROY:
-		if (sInstance)
-			Shell_NotifyIcon(NIM_DELETE, &sInstance->trayData);
+		if (instancePointer)
+			Shell_NotifyIcon(NIM_DELETE, &instancePointer->trayData);
 
 		PostQuitMessage(0);
 		return 0;
 	default:
-		if (!sInstance)
-			return DefWindowProc(hwnd, msg, w, l);
+		if (!instancePointer)
+			return DefWindowProc(handleToWindow, msg, w, l);
 
 		if (msg == taskbarCreated) {
-			sInstance->createTrayIcon();
+			instancePointer->createTrayIcon();
 			return 0;
 		}
 
 		if (msg == WM_APP_TRAY) {
 			if (l == WM_RBUTTONUP)
-				sInstance->showContextMenu();
+				instancePointer->showContextMenu();
 			return 0;
 		}
 
 		break;
 	}
 
-	return DefWindowProc(hwnd, msg, w, l);
+	return DefWindowProc(handleToWindow, msg, w, l);
 }
 
 void Application::saveSettings() {
@@ -350,7 +358,7 @@ void Application::loadSettings() {
 }
 
 int Application::run() {
-	HANDLE mutualExclusion = CreateMutexW(NULL, FALSE, L"DynamicTitleBarMutualExclusion");
+	HANDLE mutualExclusion = CreateMutexW(NULL, FALSE, APPLICATION_MUTUAL_EXCLUSION);
 	if (!mutualExclusion || GetLastError() == ERROR_ALREADY_EXISTS)
 		return 0;
 
@@ -358,7 +366,7 @@ int Application::run() {
 	wc.lpfnWndProc = wndProc;
 	wc.hInstance = instance;
 	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpszClassName = L"DynamicTitleBarWindow";
+	wc.lpszClassName = APPLICATION_WINDOW_CLASS;
 	wc.hIcon = LoadIconW(instance, MAKEINTRESOURCE(IDI_APPLICATION_ICON));
 
 	RegisterClass(&wc);
@@ -381,7 +389,7 @@ int Application::run() {
 		LR_DEFAULTCOLOR
 	);
 
-	Application::sInstance = this;
+	Application::instancePointer = this;
 
 	eventHook = SetWinEventHook(
 		EVENT_OBJECT_CREATE,
@@ -395,8 +403,14 @@ int Application::run() {
 
 	loadSettings();
 	createWindow();
-	
+
+#if _DEBUG
+	ShowWindow(window, SW_SHOW);
+#else
 	ShowWindow(window, SW_HIDE);
+#endif
+
+	applyTheme(window);
 	CreateThread(NULL, 0, themeWatcher, this, 0, NULL);
 
 	MSG msg;
